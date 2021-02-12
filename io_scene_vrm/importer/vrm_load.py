@@ -8,10 +8,8 @@ https://opensource.org/licenses/mit-license.php
 import contextlib
 import json
 import math
-import os
 import re
 import sys
-import tempfile
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import ParseResult, parse_qsl, urlparse
@@ -123,7 +121,6 @@ def read_vrm(
     model_path: str,
     extract_textures_into_folder: bool,
     make_new_texture_folder: bool,
-    use_simple_principled_material: bool,
     license_check: bool,
 ) -> vrm_types.VrmPydata:
     # datachunkは普通一つしかない
@@ -143,17 +140,7 @@ def read_vrm(
     if license_check:
         validate_license(vrm_pydata)
 
-    texture_rip(
-        vrm_pydata, body_binary, extract_textures_into_folder, make_new_texture_folder
-    )
-
-    vrm_pydata.decoded_binary = decode_bin(vrm_pydata.json, body_binary)
-
-    mesh_read(vrm_pydata)
-    material_read(vrm_pydata, use_simple_principled_material)
-    skin_read(vrm_pydata)
-    node_read(vrm_pydata)
-
+    material_read(vrm_pydata)
     return vrm_pydata
 
 
@@ -275,131 +262,55 @@ def validate_license(vrm_pydata: vrm_types.VrmPydata) -> None:
         raise LicenseConfirmationRequired(confirmations)
 
 
-def texture_rip(
-    vrm_pydata: vrm_types.VrmPydata,
-    body_binary: bytes,
-    extract_textures_into_folder: bool,
-    make_new_texture_folder: bool,
-) -> None:
-    buffer_views = vrm_pydata.json["bufferViews"]
-    binary_reader = BinaryReader(body_binary)
-    if "images" not in vrm_pydata.json:
-        return
-
-    if extract_textures_into_folder:
-        dir_path = os.path.abspath(vrm_pydata.filepath) + ".textures"
-        if make_new_texture_folder:
-            for i in range(100001):
-                checking_dir_path = dir_path if i == 0 else f"{dir_path}.{i}"
-                if not os.path.exists(checking_dir_path):
-                    os.mkdir(checking_dir_path)
-                    dir_path = checking_dir_path
-                    break
-    else:
-        dir_path = tempfile.mkdtemp()  # TODO: cleanup
-
-    def invalid_chars_remover(filename: str) -> str:
-        unsafe_chars = {
-            0: "\x00",
-            1: "\x01",
-            2: "\x02",
-            3: "\x03",
-            4: "\x04",
-            5: "\x05",
-            6: "\x06",
-            7: "\x07",
-            8: "\x08",
-            9: "\t",
-            10: "\n",
-            11: "\x0b",
-            12: "\x0c",
-            13: "\r",
-            14: "\x0e",
-            15: "\x0f",
-            16: "\x10",
-            17: "\x11",
-            18: "\x12",
-            19: "\x13",
-            20: "\x14",
-            21: "\x15",
-            22: "\x16",
-            23: "\x17",
-            24: "\x18",
-            25: "\x19",
-            26: "\x1a",
-            27: "\x1b",
-            28: "\x1c",
-            29: "\x1d",
-            30: "\x1e",
-            31: "\x1f",
-            34: '"',
-            42: "*",
-            47: "/",
-            58: ":",
-            60: "<",
-            62: ">",
-            63: "?",
-            92: "\\",
-            124: "|",
-        }  # 32:space #33:!
-        remove_table = str.maketrans(
-            "", "", "".join([chr(charnum) for charnum in unsafe_chars])
-        )
-        safe_filename = filename.translate(remove_table)
-        return safe_filename
-
-    for image_id, image_prop in enumerate(vrm_pydata.json["images"]):
-        if "extra" in image_prop:
-            image_name = image_prop["extra"]["name"]
-        else:
-            image_name = image_prop["name"]
-        binary_reader.set_pos(buffer_views[image_prop["bufferView"]]["byteOffset"])
-        image_binary = binary_reader.read_binary(
-            buffer_views[image_prop["bufferView"]]["byteLength"]
-        )
-        image_type = image_prop["mimeType"].split("/")[-1]
-        if image_name == "":
-            image_name = "texture_" + str(image_id)
-            print("no name image is named {}".format(image_name))
-        elif len(image_name) >= 50:
-            print(
-                "too long name image: {} is named {}".format(
-                    image_name, "tex_2longname_" + str(image_id)
-                )
-            )
-            image_name = "tex_2longname_" + str(image_id)
-
-        image_name = invalid_chars_remover(image_name)
-        image_path = os.path.join(dir_path, image_name)
-        if os.path.splitext(image_name)[1].lower() != ("." + image_type).lower():
-            image_path += "." + image_type
-        if not os.path.exists(image_path):  # すでに同名の画像がある場合は基本上書きしない
-            with open(image_path, "wb") as image_writer:
-                image_writer.write(image_binary)
-        elif image_name in [
-            img.name for img in vrm_pydata.image_properties
-        ]:  # ただ、それがこのVRMを開いた時の名前の時はちょっと考えて書いてみる。
-            written_flag = False
-            for i in range(100000):
-                second_image_name = image_name + "_" + str(i)
-                image_path = os.path.join(
-                    dir_path, second_image_name + "." + image_type
-                )
-                if not os.path.exists(image_path):
-                    with open(image_path, "wb") as image_writer:
-                        image_writer.write(image_binary)
-                    image_name = second_image_name
-                    written_flag = True
-                    break
-            if not written_flag:
-                print(
-                    "There are more than 100000 images with the same name in the folder."
-                    + f" Failed to write file: {image_name}"
-                )
-        else:
-            print(image_name + " Image already exists. Was not overwritten.")
-        image_property = vrm_types.ImageProps(image_name, image_path, image_type)
-        vrm_pydata.image_properties.append(image_property)
+def remove_unsafe_path_chars(filename: str) -> str:
+    unsafe_chars = {
+        0: "\x00",
+        1: "\x01",
+        2: "\x02",
+        3: "\x03",
+        4: "\x04",
+        5: "\x05",
+        6: "\x06",
+        7: "\x07",
+        8: "\x08",
+        9: "\t",
+        10: "\n",
+        11: "\x0b",
+        12: "\x0c",
+        13: "\r",
+        14: "\x0e",
+        15: "\x0f",
+        16: "\x10",
+        17: "\x11",
+        18: "\x12",
+        19: "\x13",
+        20: "\x14",
+        21: "\x15",
+        22: "\x16",
+        23: "\x17",
+        24: "\x18",
+        25: "\x19",
+        26: "\x1a",
+        27: "\x1b",
+        28: "\x1c",
+        29: "\x1d",
+        30: "\x1e",
+        31: "\x1f",
+        34: '"',
+        42: "*",
+        47: "/",
+        58: ":",
+        60: "<",
+        62: ">",
+        63: "?",
+        92: "\\",
+        124: "|",
+    }  # 32:space #33:!
+    remove_table = str.maketrans(
+        "", "", "".join([chr(charnum) for charnum in unsafe_chars])
+    )
+    safe_filename = filename.translate(remove_table)
+    return safe_filename
 
 
 #  "accessorの順に" データを読み込んでリストにしたものを返す
@@ -516,9 +427,7 @@ def mesh_read(vrm_pydata: vrm_types.VrmPydata) -> None:
     # ここからマテリアル
 
 
-def material_read(
-    vrm_pydata: vrm_types.VrmPydata, use_simple_principled_material: bool
-) -> None:
+def material_read(vrm_pydata: vrm_types.VrmPydata) -> None:
     json_materials = vrm_pydata.json.get("materials", [])
     vrm_extension_material_properties = json_get(
         vrm_pydata.json,
@@ -529,9 +438,7 @@ def material_read(
         return
 
     for mat, ext_mat in zip(json_materials, vrm_extension_material_properties):
-        material = vrm2pydata_factory.material(
-            mat, ext_mat, use_simple_principled_material
-        )
+        material = vrm2pydata_factory.material(mat, ext_mat)
         if material is not None:
             vrm_pydata.materials.append(material)
 
@@ -648,6 +555,5 @@ if __name__ == "__main__":
         sys.argv[1],
         extract_textures_into_folder=True,
         make_new_texture_folder=True,
-        use_simple_principled_material=False,
         license_check=True,
     )
