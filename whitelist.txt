@@ -88,6 +88,8 @@ glb
 glbs
 glsl
 gltf
+gltf2
+gltf2AddonDisabledWarning
 hb
 hpos
 hrad

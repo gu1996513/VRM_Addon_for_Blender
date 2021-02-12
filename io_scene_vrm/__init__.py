@@ -129,6 +129,16 @@ class ImportVRM(bpy.types.Operator, ImportHelper):  # type: ignore[misc]
             ),
         )
 
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> Set[str]:
+        if "gltf" not in dir(bpy.ops.import_scene):
+            return cast(
+                Set[str],
+                bpy.ops.wm.gltf2_addon_disabled_warning(
+                    "INVOKE_DEFAULT",
+                ),
+            )
+        return cast(Set[str], ImportHelper.invoke(self, context, event))
+
 
 def create_blend_model(
     addon: Any, context: bpy.types.Context, vrm_pydata: vrm_types.VrmPydata
@@ -420,6 +430,25 @@ class VRM_IMPORTER_PT_controller(bpy.types.Panel):  # type: ignore[misc] # noqa:
         # endregion draw_main
 
 
+class WM_OT_gltf2AddonDisabledWarning(bpy.types.Operator):  # type: ignore[misc] # noqa: N801
+    bl_label = "glTF 2.0 Addon is disabled"
+    bl_idname = "wm.gltf2_addon_disabled_warning"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> Set[str]:
+        return {"FINISHED"}
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> Set[str]:
+        return cast(
+            Set[str], context.window_manager.invoke_props_dialog(self, width=500)
+        )
+
+    def draw(self, context: bpy.types.Context) -> None:
+        self.layout.label(
+            text='Official add-on "glTF 2.0 format" is required. Please enable it.'
+        )
+
+
 class WM_OT_licenseConfirmation(bpy.types.Operator):  # type: ignore[misc] # noqa: N801
     bl_label = "License confirmation"
     bl_idname = "wm.vrm_license_warning"
@@ -501,6 +530,7 @@ classes = [
     VrmAddonPreferences,
     LicenseConfirmation,
     WM_OT_licenseConfirmation,
+    WM_OT_gltf2AddonDisabledWarning,
     vrm_helper.Bones_rename,
     vrm_helper.Add_VRM_extensions_to_armature,
     vrm_helper.Add_VRM_require_humanbone_custom_property,
@@ -529,6 +559,10 @@ translation_dictionary = {
         ("*", "VRM Export"): "VRMエクスポート",
         ("*", "Validate VRM model"): "VRMモデルのチェック",
         ("*", "Extract texture images into the folder"): "テクスチャ画像をフォルダに展開",
+        (
+            "*",
+            'Official add-on "glTF 2.0 format" is required. Please enable it.',
+        ): "公式アドオン「gltf 2.0 format」が必要です。有効化してください。",
     }
 }
 
