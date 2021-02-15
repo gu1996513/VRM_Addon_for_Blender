@@ -66,6 +66,7 @@ eval
 exc
 exeext
 existance
+exportBlenderVersionWarning
 f00
 fabs
 filedialog
@@ -104,6 +105,7 @@ idx
 ik
 ikc
 img
+importBlenderVersionWarning
 incr
 inv
 invisibles

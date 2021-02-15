@@ -110,6 +110,13 @@ class ImportVRM(bpy.types.Operator, ImportHelper):  # type: ignore[misc]
         )
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> Set[str]:
+        if bpy.app.version < (2, 83):
+            return cast(
+                Set[str],
+                bpy.ops.wm.import_blender_version_warning(
+                    "INVOKE_DEFAULT",
+                ),
+            )
         if "gltf" not in dir(bpy.ops.import_scene):
             return cast(
                 Set[str],
@@ -204,6 +211,13 @@ class ExportVRM(bpy.types.Operator, ExportHelper):  # type: ignore[misc]
         return {"FINISHED"}
 
     def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> Set[str]:
+        if bpy.app.version < (2, 83):
+            return cast(
+                Set[str],
+                bpy.ops.wm.export_blender_version_warning(
+                    "INVOKE_DEFAULT",
+                ),
+            )
         preferences = get_preferences(context)
         if preferences:
             self.export_invisibles = bool(preferences.export_invisibles)
@@ -414,7 +428,48 @@ class WM_OT_gltf2AddonDisabledWarning(bpy.types.Operator):  # type: ignore[misc]
 
     def draw(self, context: bpy.types.Context) -> None:
         self.layout.label(
-            text='Official add-on "glTF 2.0 format" is required. Please enable it.'
+            icon="ERROR",
+            text='Official add-on "glTF 2.0 format" is required. Please enable it.',
+        )
+
+
+class WM_OT_importBlenderVersionWarning(bpy.types.Operator):  # type: ignore[misc] # noqa: N801
+    bl_label = "Please upgrade Blender to version 2.83 or later as far as possible."
+    bl_idname = "wm.import_blender_version_warning"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> Set[str]:
+        return cast(Set[str], bpy.ops.import_scene.vrm("INVOKE_DEFAULT"))
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> Set[str]:
+        return cast(
+            Set[str], context.window_manager.invoke_props_dialog(self, width=600)
+        )
+
+    def draw(self, context: bpy.types.Context) -> None:
+        self.layout.label(
+            icon="ERROR",
+            text="Importing and exporting VRM on Blender version less than 2.83 is very unstable.",
+        )
+
+
+class WM_OT_exportBlenderVersionWarning(bpy.types.Operator):  # type: ignore[misc] # noqa: N801
+    bl_label = "Please upgrade Blender to version 2.83 or later as far as possible."
+    bl_idname = "wm.export_blender_version_warning"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context: bpy.types.Context) -> Set[str]:
+        return cast(Set[str], bpy.ops.export_scene.vrm("INVOKE_DEFAULT"))
+
+    def invoke(self, context: bpy.types.Context, event: bpy.types.Event) -> Set[str]:
+        return cast(
+            Set[str], context.window_manager.invoke_props_dialog(self, width=600)
+        )
+
+    def draw(self, context: bpy.types.Context) -> None:
+        self.layout.label(
+            icon="ERROR",
+            text="Importing and exporting VRM on Blender version less than 2.83 is very unstable.",
         )
 
 
@@ -494,6 +549,8 @@ classes = [
     LicenseConfirmation,
     WM_OT_licenseConfirmation,
     WM_OT_gltf2AddonDisabledWarning,
+    WM_OT_importBlenderVersionWarning,
+    WM_OT_exportBlenderVersionWarning,
     vrm_helper.Bones_rename,
     vrm_helper.Add_VRM_extensions_to_armature,
     vrm_helper.Add_VRM_require_humanbone_custom_property,
@@ -526,6 +583,14 @@ translation_dictionary = {
             "*",
             'Official add-on "glTF 2.0 format" is required. Please enable it.',
         ): "公式アドオン「gltf 2.0 format」が必要です。有効化してください。",
+        (
+            "*",
+            "Please upgrade Blender to version 2.83 or later as far as possible.",
+        ): "可能な限り、Blenderのバージョンを2.83以上にアップデートして下さい。",
+        (
+            "*",
+            "Importing and exporting VRM on Blender version less than 2.83 is very unstable.",
+        ): "Blenderのバージョンが2.83未満だと、VRMのインポートやエクスポートが非常に不安定です。",
     }
 }
 
