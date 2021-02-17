@@ -49,6 +49,8 @@ else:
 if update_vrm_dir and not vrm_diff(
     actual_out_bytes, pathlib.Path(in_path).read_bytes(), float_tolerance
 ):
+    if not os.path.exists(expected_out_path):
+        shutil.copy(actual_out_path, expected_out_path)
     sys.exit(0)
 
 try:

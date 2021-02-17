@@ -36,11 +36,32 @@ class TestBlender(TestCase):
             "BLENDER_VRM_TEST_VRM_DIR",
             os.path.join(self.repository_root_dir, "tests", "vrm"),
         )
-        self.test_temp_vrm_dir = os.path.join(test_vrm_dir, "temp")
+
+        command = [self.find_blender_command(), "--version"]
+        completed_process = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+        )
+        stdout_str = self.process_output_to_str(completed_process.stdout)
+        stderr_str = self.process_output_to_str(completed_process.stderr)
+        output = (
+            "\n  ".join(command)
+            + "\n===== stdout =====\n"
+            + stdout_str
+            + "===== stderr =====\n"
+            + stderr_str
+            + "=================="
+        )
+        if completed_process.returncode != 0:
+            raise Exception("Failed to execute command:\n" + output)
+        major_minor = ".".join(stdout_str.splitlines()[0].split(" ")[1].split(".")[:2])
+
+        self.test_temp_vrm_dir = os.path.join(test_vrm_dir, major_minor, "temp")
         self.test_in_vrm_dir = os.path.join(test_vrm_dir, "in")
-        self.test_out_vrm_dir = os.path.join(test_vrm_dir, "out")
-        self.test_out2_vrm_dir = os.path.join(test_vrm_dir, "out2")
-        self.test_out3_vrm_dir = os.path.join(test_vrm_dir, "out3")
+        self.test_out_vrm_dir = os.path.join(test_vrm_dir, major_minor, "out")
+        self.test_out2_vrm_dir = os.path.join(test_vrm_dir, major_minor, "out2")
+        self.test_out3_vrm_dir = os.path.join(test_vrm_dir, major_minor, "out3")
         os.makedirs(self.test_temp_vrm_dir, exist_ok=True)
         os.makedirs(self.test_out_vrm_dir, exist_ok=True)
         os.makedirs(self.test_out2_vrm_dir, exist_ok=True)
